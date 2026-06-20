@@ -5,6 +5,78 @@ import os
 from tqdm import tqdm
 from pathlib import Path
 
+TYPE_MAP = {
+    "agency_id" : "TEXT",
+    "agency_name" : "TEXT",
+    "agency_url" : "TEXT",
+    "agency_timezone" : "TEXT",
+    "agency_lang" : "VARCHAR(2)",
+    "agency_phone" : "TEXT",
+    "agency_fare_url" : "TEXT",
+    "service_id" : "TEXT",
+    "monday" : "INTEGER",
+    "tuesday" : "INTEGER",
+    "wednesday" : "INTEGER",
+    "thursday" : "INTEGER",
+    "friday" : "INTEGER",
+    "saturday" : "INTEGER",
+    "sunday" : "INTEGER",
+    "start_date" : "DATE",
+    "end_date" : "DATE",
+    "exception_type" : "INTEGER",
+    "id" : "INTEGER",
+    "name" : "TEXT",
+    "route_id" : "TEXT",
+    "route_short_time" : "INTEGER",
+    "route_long_name" : "TEXT",
+    "route_type" : "INTEGER",
+    "route_url" : "TEXT",
+    "route_color" : "TEXT",
+    "route_text_color" : "TEXT",
+    "shape_id" : "TEXT",
+    "shape_pt_lat" : "FLOAT",
+    "shape_pt_lon" : "FLOAT",
+    "shape_pt_sequence" : "INTEGER",
+    "stop_id" : "TEXT",
+    "stop_code" : "TEXT",
+    "stop_name" : "TEXT",
+    "stop_lat" : "FLOAT",
+    "stop_lon" : "FLOAT",
+    "zone_id" : "CHAR(1)",
+    "wheelchair_boarding" : "TEXT",
+    "wheelchair_accessible" : "TEXT",
+    "municipality_id" : "INTEGER",
+    "from_stop_id" : "TEXT",
+    "to_stop_id" : "TEXT",
+    "transfer_type" : "INTEGER",
+    "min_transfer_time" : "TEXT",
+    "from_route_id" : "TEXT",
+    "from_trip_id" : "TEXT",
+    "to_route_id" : "TEXT",
+    "to_trip_id" : "TEXT",
+    "trip_id" : "TEXT",
+    "trip_headsign" : "TEXT",
+    "direction_id" : "TEXT",
+    "block_id" : "TEXT",
+    "shape_id" : "TEXT",
+    "bikes_allowed" : "INTEGER",
+    "date" : "DATE",
+    "route_short_name" : "TEXT"
+}
+
+PRIMARY_KEYS = {
+    "agency" : "agency_id",
+    "calendar" : "service_id",
+    "calendar_dates" : "service_id, date",
+    "municipalities" : "name",
+    "routes" : "route_id",
+    "shapes" : "shape_id, shape_pt_sequence",
+    "stops" : "stop_id",
+    "transfers" : "from_trip_id, to_trip_id",
+    "trips" : "trip_id"
+
+}
+
 def get_gtfs_data():
     download_url = "https://data.itsfactory.fi/journeys/files/gtfs/latest/extended_gtfs_tampere.zip"
     zip_output_path = Path("data") / "extended_gtfs_tampere.zip"
@@ -43,81 +115,28 @@ def get_gtfs_data():
 
 def get_cols(file_path):
 
-    type_map = {
-        "agency_id" : "TEXT",
-        "agency_name" : "TEXT",
-        "agency_url" : "TEXT",
-        "agency_timezone" : "TEXT",
-        "agency_lang" : "VARCHAR(2)",
-        "agency_phone" : "TEXT",
-        "agency_fare_url" : "TEXT",
-        "service_id" : "TEXT",
-        "monday" : "INTEGER",
-        "tuesday" : "INTEGER",
-        "wednesday" : "INTEGER",
-        "thursday" : "INTEGER",
-        "friday" : "INTEGER",
-        "saturday" : "INTEGER",
-        "sunday" : "INTEGER",
-        "start_date" : "DATE",
-        "end_date" : "DATE",
-        "exception_type" : "INTEGER",
-        "id" : "INTEGER",
-        "name" : "TEXT",
-        "route_id" : "TEXT",
-        "route_short_time" : "INTEGER",
-        "route_long_name" : "TEXT",
-        "route_type" : "INTEGER",
-        "route_url" : "TEXT",
-        "route_color" : "TEXT",
-        "route_text_color" : "TEXT",
-        "shape_id" : "TEXT",
-        "shape_pt_lat" : "FLOAT",
-        "shape_pt_lon" : "FLOAT",
-        "shape_pt_sequence" : "INTEGER",
-        "stop_id" : "TEXT",
-        "stop_code" : "TEXT",
-        "stop_name" : "TEXT",
-        "stop_lat" : "FLOAT",
-        "stop_lon" : "FLOAT",
-        "zone_id" : "CHAR(1)",
-        "wheelchair_boarding" : "TEXT",
-        "wheelchair_accessible" : "TEXT",
-        "municipality_id" : "INTEGER",
-        "from_stop_id" : "TEXT",
-        "to_stop_id" : "TEXT",
-        "transfer_type" : "INTEGER",
-        "min_transfer_time" : "TEXT",
-        "from_route_id" : "TEXT",
-        "from_trip_id" : "TEXT",
-        "to_route_id" : "TEXT",
-        "to_trip_id" : "TEXT",
-        "trip_id" : "TEXT",
-        "trip_headsign" : "TEXT",
-        "direction_id" : "TEXT",
-        "block_id" : "TEXT",
-        "shape_id" : "TEXT",
-        "bikes_allowed" : "INTEGER",
-        "date" : "DATE",
-        "route_short_name" : "TEXT"
-    }
 
     with open(file_path) as f:
         header = f.readline().strip().split(',')
-        cols = ", ".join([f"{c} {type_map[c]}" for c in header])
+        cols = ", ".join([f"{c} {TYPE_MAP.get(c, 'TEXT')}" for c in header])
         return cols
         
 def create_table(cur, table_name, file_path):
 
         cols = get_cols(file_path)
 
+        cur.execute(f"DROP TABLE IF EXISTS {table_name}")
         cur.execute(
             f"""
-                CREATE TABLE IF NOT EXISTS {table_name}  (
+                CREATE TABLE {table_name}  (
                 {cols}
                 )
             """
         )
+
+        pk = PRIMARY_KEYS.get(table_name)
+        if pk:
+            cur.execute(f"ALTER TABLE {table_name} ADD PRIMARY KEY ({pk})")
 
 def copy_table(cur, table_name, file_path):
 
