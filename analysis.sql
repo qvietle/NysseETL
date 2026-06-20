@@ -1,0 +1,53 @@
+-- The route with the longest route long name
+--
+-- \echo 'Longest name'
+-- SELECT route_id, route_long_name
+-- FROM routes
+-- WHERE LENGTH(route_long_name) = (SELECT MAX(LENGTH(route_long_name)) FROM routes);
+-- --
+-- -- The route with the shortest route long name
+-- -- 
+-- \echo 'Shortest name'
+-- SELECT route_id, route_long_name
+-- FROM routes
+-- WHERE LENGTH(route_long_name) = (SELECT MIN(LENGTH(route_long_name)) FROM routes);
+--
+-- 
+-- -- How many stops do each zones have (A,B,C)
+--   SELECT zone_id, COUNT(*) AS stops
+--   FROM stops
+--   GROUP BY zone_id
+--   ORDER BY stops DESC;
+--
+-- --How many stops do each municipalities have?
+--   SELECT stops.municipality_id, municipalities.name, COUNT(*) AS stops
+--   FROM stops
+--   INNER JOIN municipalities ON  stops.municipality_id = municipalities.id
+--   GROUP BY stops.municipality_id, municipalities.name
+--   ORDER BY stops DESC;
+
+-- How many services are there in total for each day of the week
+-- SELECT SUM(monday) AS services_on_monday, SUM(tuesday) AS services_on_tuesday,
+--   SUM(wednesday) AS services_on_wednesday, SUM(thursday) AS services_on_thursday, SUM(friday) AS services_on_friday, SUM(saturday) AS services_on_saturday, SUM(sunday) AS services_on_sunday
+-- FROM calendar;
+
+-- How many trips are there for each service (with start and end dates)
+-- SELECT trips.service_id, calendar.start_date, calendar.end_date, COUNT(*) as amount_of_trips
+-- FROM trips
+-- INNER JOIN calendar ON trips.service_id = calendar.service_id
+-- GROUP BY trips.service_id, calendar.start_date, calendar.end_date
+-- ORDER BY amount_of_trips DESC;
+--
+-- Which stops receive the most timed/guaranteed transfers (transfer_type=1)
+  -- SELECT stops.stop_name, COUNT(*)
+  -- FROM transfers
+  -- INNER JOIN stops ON transfers.to_stop_id = stops.stop_id
+  -- GROUP BY to_stop_id, stop_name
+  -- ORDER BY COUNT(*) DESC;
+
+-- How many stops without or with wheelchair boarding are there (NONE)
+  -- SELECT wheelchair_boarding, COUNT(*)
+  -- FROM stops
+  -- GROUP BY wheelchair_boarding
+  --
+-- 
