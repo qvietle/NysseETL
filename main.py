@@ -4,6 +4,7 @@ import psycopg2
 import os
 from tqdm import tqdm
 from pathlib import Path
+from dotenv import load_dotenv
 
 TYPE_MAP = {
     "agency_id" : "TEXT",
@@ -61,7 +62,15 @@ TYPE_MAP = {
     "shape_id" : "TEXT",
     "bikes_allowed" : "INTEGER",
     "date" : "DATE",
-    "route_short_name" : "TEXT"
+    "route_short_name" : "TEXT",
+    "arrival_time" : "INTERVAL",
+    "departure_time" : "INTERVAL",
+    "stop_sequence" : "INTEGER",
+    "stop_headsign" : "TEXT",
+    "pickup_type" : "INTEGER",
+    "drop_off_type" : "INTEGER",
+    "timepoint" : "INTEGER"
+
 }
 
 PRIMARY_KEYS = {
@@ -92,14 +101,13 @@ def get_gtfs_data():
         if response.status_code == 200:
             zip_output_path.parent.mkdir(parents=True, exist_ok=True)
             total_size = int(response.headers.get('content-length', 0))
-            total_len = len(response.content)
-            with tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloadingl", colour="green") as pbar:
+            with tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading", colour="green") as pbar:
                 with open(zip_output_path, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
                         pbar.update(len(chunk))
 
-            print(f"Downloaded successfully to {zip_output_path} ({total_len} bytes)")
+            print(f"Downloaded successfully to {zip_output_path} ({total_size/1000000} megabytes Mb)")
         else:
             print(f"Failed download: HTTP {response.status_code}")
 
@@ -163,17 +171,26 @@ def initialize_db(cur):
 
     abs_paths = get_files()
     for file in abs_paths:
-        if (Path(file).stem not in ["stop_times", "fare_attributes", "fare_rules"]):
+        name = Path(file).stem
+        if (name not in ["fare_attributes", "fare_rules"]):
             print(f"creating table for {file}")
             table_name = file.split('/')[-1].split('.')[0]
             create_table(cur, table_name, file)
             copy_table(cur, table_name, file)
 
 def main():
+
+    load_dotenv()
     get_gtfs_data()
 
+    db_user = os.getenv('DB_USER')
+    db_host = os.getenv('DB_HOST')
+    db_port = os.getenv('DB_PORT')
+    db_name = os.getenv('DB_NAME')
+    db_password = os.getenv('DB_PASSWORD')
 
-    conn = psycopg2.connect(dbname="gtfs_warehouse")
+    
+    conn = psycopg2.connect(dbname=db_name, user=db_user, password=db_password, host=db_host, port=db_port)
     cur = conn.cursor()
 
     initialize_db(cur)
