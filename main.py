@@ -2,98 +2,30 @@ import zipfile
 import requests
 import psycopg2
 import os
+import logging
+import csv
 from tqdm import tqdm
 from pathlib import Path
 from dotenv import load_dotenv
+from schema_config import TYPE_MAP, PRIMARY_KEYS, TABLES_TO_SKIP
 
-TYPE_MAP = {
-    "agency_id" : "TEXT",
-    "agency_name" : "TEXT",
-    "agency_url" : "TEXT",
-    "agency_timezone" : "TEXT",
-    "agency_lang" : "VARCHAR(2)",
-    "agency_phone" : "TEXT",
-    "agency_fare_url" : "TEXT",
-    "service_id" : "TEXT",
-    "monday" : "INTEGER",
-    "tuesday" : "INTEGER",
-    "wednesday" : "INTEGER",
-    "thursday" : "INTEGER",
-    "friday" : "INTEGER",
-    "saturday" : "INTEGER",
-    "sunday" : "INTEGER",
-    "start_date" : "DATE",
-    "end_date" : "DATE",
-    "exception_type" : "INTEGER",
-    "id" : "INTEGER",
-    "name" : "TEXT",
-    "route_id" : "TEXT",
-    "route_short_time" : "INTEGER",
-    "route_long_name" : "TEXT",
-    "route_type" : "INTEGER",
-    "route_url" : "TEXT",
-    "route_color" : "TEXT",
-    "route_text_color" : "TEXT",
-    "shape_id" : "TEXT",
-    "shape_pt_lat" : "FLOAT",
-    "shape_pt_lon" : "FLOAT",
-    "shape_pt_sequence" : "INTEGER",
-    "stop_id" : "TEXT",
-    "stop_code" : "TEXT",
-    "stop_name" : "TEXT",
-    "stop_lat" : "FLOAT",
-    "stop_lon" : "FLOAT",
-    "zone_id" : "CHAR(1)",
-    "wheelchair_boarding" : "TEXT",
-    "wheelchair_accessible" : "TEXT",
-    "municipality_id" : "INTEGER",
-    "from_stop_id" : "TEXT",
-    "to_stop_id" : "TEXT",
-    "transfer_type" : "INTEGER",
-    "min_transfer_time" : "TEXT",
-    "from_route_id" : "TEXT",
-    "from_trip_id" : "TEXT",
-    "to_route_id" : "TEXT",
-    "to_trip_id" : "TEXT",
-    "trip_id" : "TEXT",
-    "trip_headsign" : "TEXT",
-    "direction_id" : "TEXT",
-    "block_id" : "TEXT",
-    "shape_id" : "TEXT",
-    "bikes_allowed" : "INTEGER",
-    "date" : "DATE",
-    "route_short_name" : "TEXT",
-    "arrival_time" : "INTERVAL",
-    "departure_time" : "INTERVAL",
-    "stop_sequence" : "INTEGER",
-    "stop_headsign" : "TEXT",
-    "pickup_type" : "INTEGER",
-    "drop_off_type" : "INTEGER",
-    "timepoint" : "INTEGER"
 
-}
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s',
+)
 
-PRIMARY_KEYS = {
-    "agency" : "agency_id",
-    "calendar" : "service_id",
-    "calendar_dates" : "service_id, date",
-    "municipalities" : "name",
-    "routes" : "route_id",
-    "shapes" : "shape_id, shape_pt_sequence",
-    "stops" : "stop_id",
-    "transfers" : "from_stop_id, to_stop_id, from_trip_id, to_trip_id",
-    "trips" : "trip_id"
+logger = logging.getLogger(__name__)
 
-}
 
 def get_gtfs_data():
     download_url = "https://data.itsfactory.fi/journeys/files/gtfs/latest/extended_gtfs_tampere.zip"
     zip_output_path = Path("data") / "extended_gtfs_tampere.zip"
 
     if zip_output_path.exists():
-        print(f"File already exists at {zip_output_path}")
+        logger.info(f"File already exists at {zip_output_path}")
     else:
-        print("Downloading GTFS data...")
+        logger.info("Downloading GTFS data...")
         headers = {
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
@@ -107,19 +39,19 @@ def get_gtfs_data():
                         f.write(chunk)
                         pbar.update(len(chunk))
 
-            print(f"Downloaded successfully to {zip_output_path} ({total_size/1000000} megabytes Mb)")
+            logger.info(f"Downloaded successfully to {zip_output_path} ({total_size/1000000} megabytes Mb)")
         else:
-            print(f"Failed download: HTTP {response.status_code}")
+            logger.info(f"Failed download: HTTP {response.status_code}")
 
     dir_output_path = Path("data/extended_gtfs_tampere")
     
     if not dir_output_path.exists():
-        print(f"Creating a dir to {dir_output_path}")
+        logger.info(f"Creating a dir to {dir_output_path}")
         dir_output_path.mkdir(parents=True)
         with zipfile.ZipFile(zip_output_path, "r")  as zf:
             zf.extractall(dir_output_path)
     else:
-        print(f"Dir already exists at {dir_output_path}")
+        logger.info(f"Dir already exists at {dir_output_path}")
 
 def get_cols(file_path):
 
@@ -152,13 +84,23 @@ def copy_table(cur, table_name, file_path):
     not_empty = cur.fetchone()[0]
 
     if (not_empty):
-        print("THIS SHIT IS NOT EMPTY")
+
         return
 
+    row_count = 0
 
     cols = get_cols(file_path)
+
+    # Count rows
+    with open(file_path, 'r') as f:
+        reader = csv.reader(f)
+        row_count = sum(1 for row in reader)
+
+    # Load data
     with open(file_path, 'r') as f:
         cur.copy_expert(f"COPY {table_name} FROM STDIN CSV HEADER", f)
+
+    return row_count
 
 def get_files():
     dir = "data/extended_gtfs_tampere"
@@ -170,13 +112,24 @@ def get_files():
 def initialize_db(cur):
 
     abs_paths = get_files()
+    row_counts = {}
+    tablerow_counts = {}
     for file in abs_paths:
         name = Path(file).stem
-        if (name not in ["fare_attributes", "fare_rules"]):
-            print(f"creating table for {file}")
+        if (name not in TABLES_TO_SKIP):
+            logger.info(f"creating table for {file}")
             table_name = file.split('/')[-1].split('.')[0]
+
             create_table(cur, table_name, file)
-            copy_table(cur, table_name, file)
+            row_count = copy_table(cur, table_name, file)
+            cur.execute(f"SELECT COUNT(*) FROM {table_name}")
+            tablerow_count = cur.fetchone()[0]
+            row_counts[table_name] = row_count-1
+            tablerow_counts[table_name] = tablerow_count
+
+            logger.info(f"[{table_name}] Source: {row_counts[table_name]} Target: {tablerow_counts[table_name]} ")
+        
+    return row_counts == tablerow_counts
 
 def main():
 
@@ -193,8 +146,13 @@ def main():
     conn = psycopg2.connect(dbname=db_name, user=db_user, password=db_password, host=db_host, port=db_port)
     cur = conn.cursor()
 
-    initialize_db(cur)
-    conn.commit()
+    init_ok = initialize_db(cur)
+    if init_ok:
+        conn.commit()
+        logger.info("Database initialized successfully")
+    else:
+        conn.rollback()
+        logger.error("Database initialization failed")
 
 
 
