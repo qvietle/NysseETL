@@ -19,8 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 def get_gtfs_data():
-    download_url = "https://data.itsfactory.fi/journeys/files/gtfs/latest/extended_gtfs_tampere.zip"
-    zip_output_path = Path("data") / "extended_gtfs_tampere.zip"
+    download_url = os.getenv('GTFS_FEED_URL', 'https://data.itsfactory.fi/journeys/files/gtfs/latest/extended_gtfs_tampere.zip')
+
+    file_name = os.path.basename(download_url)
+    zip_output_path = Path("data") / file_name
 
     if zip_output_path.exists():
         logger.info(f"File already exists at {zip_output_path}")
@@ -43,8 +45,9 @@ def get_gtfs_data():
         else:
             logger.info(f"Failed download: HTTP {response.status_code}")
 
-    dir_output_path = Path("data/extended_gtfs_tampere")
-    
+    file_dir = file_name.split('.')[0]
+
+    dir_output_path = Path("data") / file_dir
     if not dir_output_path.exists():
         logger.info(f"Creating a dir to {dir_output_path}")
         dir_output_path.mkdir(parents=True)
@@ -52,7 +55,8 @@ def get_gtfs_data():
             zf.extractall(dir_output_path)
     else:
         logger.info(f"Dir already exists at {dir_output_path}")
-
+    
+    return file_dir
 def get_cols(file_path):
 
 
@@ -102,16 +106,16 @@ def copy_table(cur, table_name, file_path):
 
     return row_count
 
-def get_files():
-    dir = "data/extended_gtfs_tampere"
+def get_files(file_name):
+    dir = f"data/{file_name}"
     txt_files = os.listdir(dir)
     abs_paths = [os.path.abspath(os.path.join(dir, f)) for f in txt_files]
     return abs_paths
         
 
-def initialize_db(cur):
+def initialize_db(cur, file_name):
 
-    abs_paths = get_files()
+    abs_paths = get_files(file_name)
     row_counts = {}
     tablerow_counts = {}
     for file in abs_paths:
@@ -134,7 +138,7 @@ def initialize_db(cur):
 def main():
 
     load_dotenv()
-    get_gtfs_data()
+    file_name = get_gtfs_data()
 
     db_user = os.getenv('DB_USER')
     db_host = os.getenv('DB_HOST')
@@ -146,7 +150,7 @@ def main():
     conn = psycopg2.connect(dbname=db_name, user=db_user, password=db_password, host=db_host, port=db_port)
     cur = conn.cursor()
 
-    init_ok = initialize_db(cur)
+    init_ok = initialize_db(cur, file_name)
     if init_ok:
         conn.commit()
         logger.info("Database initialized successfully")

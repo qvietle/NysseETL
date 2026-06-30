@@ -35,7 +35,7 @@ TYPE_MAP = {
     "stop_name" : "TEXT",
     "stop_lat" : "FLOAT",
     "stop_lon" : "FLOAT",
-    "zone_id" : "CHAR(1)",
+    "zone_id" : "TEXT",
     "wheelchair_boarding" : "TEXT",
     "wheelchair_accessible" : "TEXT",
     "municipality_id" : "INTEGER",
@@ -73,7 +73,7 @@ PRIMARY_KEYS = {
     "routes" : "route_id",
     "shapes" : "shape_id, shape_pt_sequence",
     "stops" : "stop_id",
-    "transfers" : "from_stop_id, to_stop_id, from_trip_id, to_trip_id",
+    "transfers" : "from_stop_id, to_stop_id, transfer_type",
     "trips" : "trip_id"
 
 }
