@@ -19,35 +19,48 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def download_gtfs(download_url, zip_output_path, file_dir):
+def download_gtfs(download_url, zip_output_path, file_dir, max_entries=3, delay=3):
     logger.info("Downloading GTFS data...")
     headers = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    response = requests.get(download_url, headers=headers, stream=True)
-    if response.status_code == 200:
-        zip_output_path.parent.mkdir(parents=True, exist_ok=True)
-        total_size = int(response.headers.get('content-length', 0))
-        with tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading", colour="green") as pbar:
-            with open(zip_output_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-                    pbar.update(len(chunk))
+    
+    for attempt in range(max_entries):
+        try:
+            response = requests.get(download_url, headers=headers, stream=True)
+            response.raise_for_status()
+            
+            if response.status_code == 200:
+                zip_output_path.parent.mkdir(parents=True, exist_ok=True)
+                total_size = int(response.headers.get('content-length', 0))
+                with tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading", colour="green") as pbar:
+                    with open(zip_output_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                            pbar.update(len(chunk))
+                dir_output_path = Path("data") / file_dir
+                if not dir_output_path.exists():
+                    logger.info(f"Creating a dir to {dir_output_path}")
+                    dir_output_path.mkdir(parents=True)
+                    with zipfile.ZipFile(zip_output_path, "r")  as zf:
+                        zf.extractall(dir_output_path)
+                else:
+                    logger.info(f"Dir already exists at {dir_output_path}")
+                    logger.info(f"Downloaded successfully to {zip_output_path} ({total_size/1000000} megabytes Mb)")
 
-        logger.info(f"Downloaded successfully to {zip_output_path} ({total_size/1000000} megabytes Mb)")
+                break
 
-    else:
-        logger.info(f"Failed download: HTTP {response.status_code}")
+            else:
+                logger.error(f"Failed download: HTTP {response.status_code}")
+
+        except requests.exceptions.HTTPError as e:
+            logger.warning(f"HTTP error: {e} (attempt {attempt+1}")
+            if e.response.status_code == 404:
+                logger.error("File not found")
 
 
-    dir_output_path = Path("data") / file_dir
-    if not dir_output_path.exists():
-        logger.info(f"Creating a dir to {dir_output_path}")
-        dir_output_path.mkdir(parents=True)
-        with zipfile.ZipFile(zip_output_path, "r")  as zf:
-            zf.extractall(dir_output_path)
-    else:
-        logger.info(f"Dir already exists at {dir_output_path}")
+
+
 
 def get_gtfs_data():
     download_url = os.getenv('GTFS_FEED_URL', 'https://data.itsfactory.fi/journeys/files/gtfs/latest/extended_gtfs_tampere.zip')
@@ -59,7 +72,7 @@ def get_gtfs_data():
         
     if os.path.exists("data") and os.path.exists(f"data/{file_name}"):
         while True:
-            answer = input("Redownload GTFS data? y/n")
+            answer = input("Redownload GTFS data? y/n \n >> ")
             if answer.lower() == 'y':
                 shutil.rmtree("data")
                 logger.info("Deleted data folder")
