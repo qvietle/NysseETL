@@ -73,7 +73,6 @@ PRIMARY_KEYS = {
     "routes" : "route_id",
     "shapes" : "shape_id, shape_pt_sequence",
     "stops" : "stop_id",
-    "transfers" : "from_stop_id, to_stop_id, transfer_type",
     "trips" : "trip_id"
 
 }

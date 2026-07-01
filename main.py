@@ -4,6 +4,7 @@ import psycopg2
 import os
 import logging
 import csv
+import shutil
 from tqdm import tqdm
 from pathlib import Path
 from dotenv import load_dotenv
@@ -18,34 +19,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def get_gtfs_data():
-    download_url = os.getenv('GTFS_FEED_URL', 'https://data.itsfactory.fi/journeys/files/gtfs/latest/extended_gtfs_tampere.zip')
+def download_gtfs(download_url, zip_output_path, file_dir):
+    logger.info("Downloading GTFS data...")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    response = requests.get(download_url, headers=headers, stream=True)
+    if response.status_code == 200:
+        zip_output_path.parent.mkdir(parents=True, exist_ok=True)
+        total_size = int(response.headers.get('content-length', 0))
+        with tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading", colour="green") as pbar:
+            with open(zip_output_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+                    pbar.update(len(chunk))
 
-    file_name = os.path.basename(download_url)
-    zip_output_path = Path("data") / file_name
+        logger.info(f"Downloaded successfully to {zip_output_path} ({total_size/1000000} megabytes Mb)")
 
-    if zip_output_path.exists():
-        logger.info(f"File already exists at {zip_output_path}")
     else:
-        logger.info("Downloading GTFS data...")
-        headers = {
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        response = requests.get(download_url, headers=headers, stream=True)
-        if response.status_code == 200:
-            zip_output_path.parent.mkdir(parents=True, exist_ok=True)
-            total_size = int(response.headers.get('content-length', 0))
-            with tqdm(total=total_size, unit='B', unit_scale=True, desc="Downloading", colour="green") as pbar:
-                with open(zip_output_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                        pbar.update(len(chunk))
+        logger.info(f"Failed download: HTTP {response.status_code}")
 
-            logger.info(f"Downloaded successfully to {zip_output_path} ({total_size/1000000} megabytes Mb)")
-        else:
-            logger.info(f"Failed download: HTTP {response.status_code}")
-
-    file_dir = file_name.split('.')[0]
 
     dir_output_path = Path("data") / file_dir
     if not dir_output_path.exists():
@@ -55,8 +48,30 @@ def get_gtfs_data():
             zf.extractall(dir_output_path)
     else:
         logger.info(f"Dir already exists at {dir_output_path}")
+
+def get_gtfs_data():
+    download_url = os.getenv('GTFS_FEED_URL', 'https://data.itsfactory.fi/journeys/files/gtfs/latest/extended_gtfs_tampere.zip')
+
+    file_name = os.path.basename(download_url)
+    zip_output_path = Path("data") / file_name
     
+    file_dir = file_name.split('.')[0]
+        
+    if os.path.exists("data") and os.path.exists(f"data/{file_name}"):
+        while True:
+            answer = input("Redownload GTFS data? y/n")
+            if answer.lower() == 'y':
+                shutil.rmtree("data")
+                logger.info("Deleted data folder")
+                download_gtfs(download_url, zip_output_path, file_dir)
+                break
+            elif answer.lower() == 'n':
+                break
+    else:
+        download_gtfs(download_url, zip_output_path, file_dir)
+
     return file_dir
+
 def get_cols(file_path):
 
 
@@ -106,21 +121,23 @@ def copy_table(cur, table_name, file_path):
 
     return row_count
 
-def get_files(file_name):
-    dir = f"data/{file_name}"
+def get_files(file_dir):
+    dir = f"data/{file_dir}"
     txt_files = os.listdir(dir)
     abs_paths = [os.path.abspath(os.path.join(dir, f)) for f in txt_files]
     return abs_paths
         
 
-def initialize_db(cur, file_name):
+def initialize_db(cur, file_dir):
 
-    abs_paths = get_files(file_name)
+    abs_paths = get_files(file_dir)
     row_counts = {}
     tablerow_counts = {}
     for file in abs_paths:
         name = Path(file).stem
         if (name not in TABLES_TO_SKIP):
+
+
             logger.info(f"creating table for {file}")
             table_name = file.split('/')[-1].split('.')[0]
 
@@ -150,13 +167,13 @@ def main():
     conn = psycopg2.connect(dbname=db_name, user=db_user, password=db_password, host=db_host, port=db_port)
     cur = conn.cursor()
 
-    init_ok = initialize_db(cur, file_name)
-    if init_ok:
+    try:
+        init_ok = initialize_db(cur, file_name)
         conn.commit()
         logger.info("Database initialized successfully")
-    else:
+    except psycopg2.Error as e:
         conn.rollback()
-        logger.error("Database initialization failed")
+        logger.error(f"Database initialization failed\n Error: {e}")
 
 
 
