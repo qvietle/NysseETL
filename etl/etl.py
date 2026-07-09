@@ -8,7 +8,7 @@ import shutil
 from tqdm import tqdm
 from pathlib import Path
 from dotenv import load_dotenv
-from schema_config import TYPE_MAP, PRIMARY_KEYS, TABLES_TO_SKIP
+from schema_config import TYPE_MAP, PRIMARY_KEYS, FOREIGN_KEYS, TABLES_TO_SKIP
 
 
 logging.basicConfig(
@@ -110,6 +110,9 @@ def create_table(cur, table_name, file_path):
         if pk:
             cur.execute(f"ALTER TABLE {table_name} ADD PRIMARY KEY ({pk})")
 
+        fk = FOREIGN_KEYS.get(table_name)
+
+
 def copy_table(cur, table_name, file_path):
 
     cur.execute(f"SELECT EXISTS (SELECT 1 FROM {table_name})")
@@ -140,6 +143,22 @@ def get_files(file_dir):
     abs_paths = [os.path.abspath(os.path.join(dir, f)) for f in txt_files]
     return abs_paths
         
+def create_shapes_metadata(cur):
+    logger.info("creating table for shapes_metadata")
+    
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS shapes_metadata (
+            shape_id TEXT PRIMARY KEY
+        )
+                """)
+
+    cur.execute("""
+                    INSERT INTO shapes_metadata (shape_id)
+                    SELECT DISTINCT shape_id FROM shapes
+                    ON CONFLICT (shape_id) DO NOTHING
+                """)
+
+    logger.info("shapes_metadata populated")
 
 def initialize_db(cur, file_dir):
 
@@ -163,6 +182,8 @@ def initialize_db(cur, file_dir):
 
             logger.info(f"[{table_name}] Source: {row_counts[table_name]} Target: {tablerow_counts[table_name]} ")
         
+    create_shapes_metadata(cur)
+
     return row_counts == tablerow_counts
 
 def main():
