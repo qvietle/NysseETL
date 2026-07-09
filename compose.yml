@@ -1,0 +1,45 @@
+services:
+  db: 
+    image: postgres:18
+    container_name: postgres-dev
+    ports: 
+      - "5433:5432"
+    environment:
+        POSTGRES_USER: ${DB_USER}
+        POSTGRES_PASSWORD: ${DB_PASSWORD}
+        POSTGRES_DB: ${DB_NAME}
+
+        APP_USER : ${DB_APP_USER}
+        APP_PASSWORD : ${DB_APP_PASSWORD}
+    volumes:
+      - ./init-db:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_APP_USER} -d ${DB_NAME}"]
+      interval: 5s
+      retries: 5
+
+  etl:
+    build: ./etl 
+    develop:
+      watch:
+        - action: sync
+          path: ./etl
+          target: /app
+        - action: rebuild
+          path: ./etl/requirements.txt
+    container_name: etl-dev
+    environment:
+        DB_USER: ${DB_APP_USER}
+        DB_PASSWORD: ${DB_APP_PASSWORD}
+        DB_NAME: ${DB_NAME}
+        DB_PORT: ${DB_PORT}
+        DB_HOST: ${DB_HOST}
+    depends_on:
+      db:
+        condition: service_healthy
+
+
+
+volumes:
+  postgres_data:
