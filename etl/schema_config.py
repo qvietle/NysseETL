@@ -81,14 +81,15 @@ FOREIGN_KEYS = {
     "stops": [{"column": "municipality_id", "parent_table": "municipalities", "parent_column": "id"}],
     "calendar_dates": [{"column": "service_id", "parent_table": "calendar", "parent_column": "service_id"}],
     "trips": [{"column": "route_id", "parent_table": "routes", "parent_column": "route_id"},
-              {"column": "service_id", "parent_table": "calendar_dates", "parent_column": "service_id"},
+              {"column": "service_id", "parent_table": "calendar", "parent_column": "service_id"},
               {"column": "shape_id", "parent_table": "shapes_metadata", "parent_column": "shape_id"}],
     "transfers": [{"column": "from_stop_id", "parent_table": "stops", "parent_column": "stop_id"},
-                  {"column": "to_stop_id", "parent_table": "stops", "parent_column": "stop_id"},
-                  {"column": "from_route_id", "parent_table": "routes", "parent_column": "route_id"},
-                  {"column": "to_route_id", "parent_table": "routes", "parent_column": "route_id"},
-                  {"column": "from_trip_id", "parent_table": "trips", "parent_column": "trip_id"},
-                  {"column": "from_trip_id", "parent_table": "trips", "parent_column": "trip_id"}]
+                  {"column": "to_stop_id", "parent_table": "stops", "parent_column": "stop_id"}
+                  # {"column": "from_route_id", "parent_table": "routes", "parent_column": "route_id"},
+                  # {"column": "to_route_id", "parent_table": "routes", "parent_column": "route_id"},
+                  # {"column": "from_trip_id", "parent_table": "trips", "parent_column": "trip_id"},
+                  # {"column": "from_trip_id", "parent_table": "trips", "parent_column": "trip_id"}
+                  ]
 }
 
 TABLES_TO_SKIP = ["fare_attributes", "fare_rules"]

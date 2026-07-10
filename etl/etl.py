@@ -110,7 +110,17 @@ def create_table(cur, table_name, file_path):
         if pk:
             cur.execute(f"ALTER TABLE {table_name} ADD PRIMARY KEY ({pk})")
 
+def add_foreign_keys(cur, table_name):
         fk = FOREIGN_KEYS.get(table_name)
+        if fk:
+            for key in fk:
+                cur.execute(f"""
+                    ALTER TABLE {table_name}
+                    ADD CONSTRAINT fk_{table_name}_{key.get("parent_table")}_{key.get("column")}
+                    FOREIGN KEY ({key.get("column")})
+                    REFERENCES {key.get("parent_table")}({key.get("parent_column")})
+                """)
+
 
 
 def copy_table(cur, table_name, file_path):
@@ -183,6 +193,13 @@ def initialize_db(cur, file_dir):
             logger.info(f"[{table_name}] Source: {row_counts[table_name]} Target: {tablerow_counts[table_name]} ")
         
     create_shapes_metadata(cur)
+    for file in abs_paths:
+        name = Path(file).stem
+        logger.info(f"adding add_foreign_keys for {file}")
+        table_name = file.split('/')[-1].split('.')[0]
+
+        if (name not in TABLES_TO_SKIP):
+            add_foreign_keys(cur, table_name)
 
     return row_counts == tablerow_counts
 
